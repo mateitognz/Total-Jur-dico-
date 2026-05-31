@@ -1,0 +1,1112 @@
+import { useState, useEffect, useRef } from "react";
+
+// ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
+const COLORS = {
+  navy: "#0A1628",
+  navyMid: "#0F2040",
+  navyLight: "#1A3158",
+  gold: "#C9A84C",
+  goldLight: "#E8C86A",
+  goldDim: "#8A6E2F",
+  cream: "#F5F0E8",
+  creamDark: "#E8E0D0",
+  white: "#FFFFFF",
+  slate: "#64748B",
+  slateLight: "#94A3B8",
+  success: "#10B981",
+  warning: "#F59E0B",
+  danger: "#EF4444",
+  info: "#3B82F6",
+};
+
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+const INITIAL_LEADS = [
+  { id: 1, name: "Carlos Mendoza", cedula: "1098765432", phone: "3001234567", email: "carlos@email.com", type: "Sucesión", city: "Bogotá", stage: "lead", date: "2026-05-28", radicado: "TJ-2026-001", value: 4500000 },
+  { id: 2, name: "María González", cedula: "52987654", phone: "3109876543", email: "maria@email.com", type: "Arrendamiento", city: "Medellín", stage: "info_pending", date: "2026-05-27", radicado: "TJ-2026-002", value: 1800000 },
+  { id: 3, name: "Empresa SAS", cedula: "900123456-1", phone: "3201234567", email: "info@empresa.com", type: "Constitución empresa", city: "Cali", stage: "evaluation", date: "2026-05-25", radicado: "TJ-2026-003", value: 3200000 },
+  { id: 4, name: "Pedro Rodríguez", cedula: "79654321", phone: "3154567890", email: "pedro@email.com", type: "Contrato", city: "Bogotá", stage: "quote_sent", date: "2026-05-22", radicado: "TJ-2026-004", value: 2100000 },
+  { id: 5, name: "Ana Martínez", cedula: "43876543", phone: "3003216547", email: "ana@email.com", type: "Derecho civil", city: "Barranquilla", stage: "signed", date: "2026-05-18", radicado: "TJ-2026-005", value: 5600000 },
+  { id: 6, name: "Luis Herrera", cedula: "1032456789", phone: "3187654321", email: "luis@email.com", type: "Derecho comercial", city: "Bogotá", stage: "execution", date: "2026-05-10", radicado: "TJ-2026-006", value: 8900000 },
+  { id: 7, name: "Sandra Torres", cedula: "52123456", phone: "3114567890", email: "sandra@email.com", type: "Sucesión", city: "Medellín", stage: "closed", date: "2026-04-30", radicado: "TJ-2026-007", value: 6300000 },
+];
+
+const PIPELINE_STAGES = [
+  { id: "lead", label: "Lead Recibido", color: "#3B82F6", icon: "📥" },
+  { id: "info_pending", label: "Info Pendiente", color: "#F59E0B", icon: "📋" },
+  { id: "evaluation", label: "Eval. Jurídica", color: "#8B5CF6", icon: "⚖️" },
+  { id: "quote_sent", label: "Cotización Enviada", color: "#EC4899", icon: "💰" },
+  { id: "signed", label: "Contrato Firmado", color: "#10B981", icon: "✍️" },
+  { id: "execution", label: "En Ejecución", color: "#06B6D4", icon: "🔄" },
+  { id: "closed", label: "Finalizado", color: "#64748B", icon: "✅" },
+];
+
+const CASE_TYPES = ["Sucesión", "Arrendamiento", "Constitución empresa", "Contrato", "Derecho civil", "Derecho comercial"];
+
+const ACTIVITIES = [
+  { id: 1, leadId: 1, type: "email", text: "Correo de confirmación enviado", date: "2026-05-28 09:15", user: "Sistema" },
+  { id: 2, leadId: 1, type: "call", text: "Llamada inicial — 15 min", date: "2026-05-28 11:30", user: "Dr. Ramírez" },
+  { id: 3, leadId: 2, type: "doc", text: "Checklist de documentos enviado", date: "2026-05-27 14:00", user: "Sistema" },
+  { id: 4, leadId: 3, type: "meeting", text: "Reunión virtual agendada", date: "2026-05-26 16:00", user: "Dra. López" },
+  { id: 5, leadId: 4, type: "quote", text: "Cotización $2.100.000 enviada", date: "2026-05-23 10:00", user: "Dr. Ramírez" },
+];
+
+const CHECKLIST_TEMPLATES = {
+  "Sucesión": ["Registro civil de nacimiento del causante", "Certificado de defunción", "Escrituras de bienes inmuebles", "Extractos bancarios recientes", "Testamento (si existe)", "Cédulas de herederos"],
+  "Arrendamiento": ["Contrato de arrendamiento vigente", "Cédulas de arrendador y arrendatario", "Recibos de pago o evidencias de incumplimiento", "Fotos del inmueble", "Paz y salvo de servicios"],
+  "Constitución empresa": ["Nombre propuesto de la sociedad", "Actividad económica CIIU", "Lista de socios con cédulas", "Porcentaje de participación", "Capital inicial", "Dirección fiscal"],
+  "Contrato": ["Borrador del contrato", "Cédulas de las partes", "Documentos de respaldo", "Garantías (si aplica)"],
+  "Derecho civil": ["Descripción detallada del caso", "Documentos probatorios", "Comunicaciones previas", "Testigos (si aplica)"],
+  "Derecho comercial": ["Documentos societarios", "Contratos mercantiles", "Estados financieros", "Registros Cámara de Comercio"],
+};
+
+const formatCurrency = (n) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n);
+const formatDate = (d) => new Date(d).toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" });
+
+// ─── ICONS ────────────────────────────────────────────────────────────────────
+const Icon = ({ name, size = 16, color = "currentColor" }) => {
+  const icons = {
+    dashboard: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+    pipeline: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>,
+    clients: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    docs: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+    calendar: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+    metrics: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+    ai: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 8v4l3 3"/><circle cx="18" cy="5" r="3"/></svg>,
+    settings: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>,
+    plus: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+    search: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+    bell: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+    send: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+    check: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
+    x: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    chevronRight: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>,
+    eye: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
+    edit: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+    upload: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>,
+    robot: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>,
+    scale: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M12 3v18M3 9l9-6 9 6M3 15l9 6 9-6"/></svg>,
+  };
+  return icons[name] || null;
+};
+
+// ─── BADGE ────────────────────────────────────────────────────────────────────
+const Badge = ({ stage }) => {
+  const s = PIPELINE_STAGES.find((p) => p.id === stage);
+  if (!s) return null;
+  return (
+    <span style={{ background: s.color + "22", color: s.color, border: `1px solid ${s.color}44`, padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+      {s.icon} {s.label}
+    </span>
+  );
+};
+
+// ─── STAT CARD ────────────────────────────────────────────────────────────────
+const StatCard = ({ label, value, sub, color, icon }) => (
+  <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 8, position: "relative", overflow: "hidden" }}>
+    <div style={{ position: "absolute", right: 20, top: 16, fontSize: 28, opacity: 0.2 }}>{icon}</div>
+    <div style={{ fontSize: 12, color: COLORS.slateLight, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+    <div style={{ fontSize: 28, fontWeight: 800, color: color || COLORS.goldLight }}>{value}</div>
+    {sub && <div style={{ fontSize: 12, color: COLORS.slate }}>{sub}</div>}
+    <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color || COLORS.gold}, transparent)`, borderRadius: "0 0 16px 16px" }} />
+  </div>
+);
+
+// ─── PROGRESS TRACKER ─────────────────────────────────────────────────────────
+const ProgressTracker = ({ stage }) => {
+  const idx = PIPELINE_STAGES.findIndex((s) => s.id === stage);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+      {PIPELINE_STAGES.map((s, i) => (
+        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+            background: i <= idx ? s.color : COLORS.navyLight,
+            border: `2px solid ${i <= idx ? s.color : COLORS.navyLight}`,
+            fontSize: 12, transition: "all 0.3s",
+          }}>
+            {i < idx ? <Icon name="check" size={12} color="#fff" /> : <span style={{ fontSize: 11 }}>{s.icon}</span>}
+          </div>
+          {i < PIPELINE_STAGES.length - 1 && (
+            <div style={{ width: 20, height: 2, background: i < idx ? COLORS.gold : COLORS.navyLight, transition: "all 0.3s" }} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── MINI BAR CHART ───────────────────────────────────────────────────────────
+const MiniBarChart = ({ data, color }) => {
+  const max = Math.max(...data.map((d) => d.value));
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 80 }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          <div style={{ width: "100%", height: `${(d.value / max) * 70}px`, background: `linear-gradient(180deg, ${color}, ${color}88)`, borderRadius: "4px 4px 0 0", minHeight: 4, transition: "height 0.5s ease" }} />
+          <span style={{ fontSize: 9, color: COLORS.slateLight }}>{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── AI ASSISTANT ─────────────────────────────────────────────────────────────
+const AIAssistant = ({ lead }) => {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const bottomRef = useRef(null);
+
+  const systemPrompt = `Eres el asistente jurídico inteligente de "Total Jurídico Abogados", una firma colombiana especializada en derecho civil y comercial. 
+Actúas como un paralegal experto que asiste a los abogados.
+${lead ? `
+Contexto del caso actual:
+- Cliente: ${lead.name}
+- Radicado: ${lead.radicado}
+- Tipo de caso: ${lead.type}
+- Ciudad: ${lead.city}
+- Etapa: ${PIPELINE_STAGES.find(s => s.id === lead.stage)?.label}
+- Valor estimado: ${formatCurrency(lead.value)}
+` : ""}
+Responde siempre en español, de forma profesional y concisa. Puedes ayudar con:
+1. Análisis jurídico preliminar del caso
+2. Documentos requeridos según tipo de caso
+3. Pasos procesales recomendados
+4. Redacción de comunicaciones
+5. Estimación de tiempos
+6. Riesgos jurídicos
+Nunca des asesoría definitiva sin que un abogado la revise.`;
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = { role: "user", content: input };
+    setMessages((m) => [...m, userMsg]);
+    setInput("");
+    setLoading(true);
+    try {
+      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [...messages, userMsg],
+        }),
+      });
+      const data = await resp.json();
+      const text = data.content?.map((b) => b.text || "").join("") || "Error al conectar con el asistente.";
+      setMessages((m) => [...m, { role: "assistant", content: text }]);
+    } catch {
+      setMessages((m) => [...m, { role: "assistant", content: "⚠️ Error de conexión. Intente nuevamente." }]);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} style={{
+        position: "fixed", bottom: 28, right: 28, width: 60, height: 60, borderRadius: "50%",
+        background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})`,
+        border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        boxShadow: "0 8px 32px rgba(201,168,76,0.5)", zIndex: 1000, transition: "transform 0.2s",
+      }} onMouseEnter={e => e.target.style.transform = "scale(1.1)"} onMouseLeave={e => e.target.style.transform = "scale(1)"}>
+        <Icon name="robot" size={28} color={COLORS.navy} />
+      </button>
+    );
+  }
+
+  return (
+    <div style={{
+      position: "fixed", bottom: 28, right: 28, width: 380, height: 520, zIndex: 1000,
+      background: COLORS.navy, border: `1px solid ${COLORS.navyLight}`,
+      borderRadius: 20, display: "flex", flexDirection: "column", overflow: "hidden",
+      boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+    }}>
+      {/* Header */}
+      <div style={{ padding: "16px 20px", background: `linear-gradient(135deg, ${COLORS.navyLight}, ${COLORS.navyMid})`, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${COLORS.navyLight}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Icon name="scale" size={18} color={COLORS.navy} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.cream }}>Lex AI</div>
+            <div style={{ fontSize: 11, color: COLORS.gold }}>Asistente Jurídico</div>
+          </div>
+        </div>
+        <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: COLORS.slateLight }}>
+          <Icon name="x" size={18} />
+        </button>
+      </div>
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", color: COLORS.slateLight, fontSize: 13, marginTop: 40 }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>⚖️</div>
+            <div style={{ fontWeight: 600, color: COLORS.cream, marginBottom: 8 }}>Asistente Jurídico IA</div>
+            <div>Pregúntame sobre el caso, documentos requeridos, pasos procesales o redacción de comunicaciones.</div>
+          </div>
+        )}
+        {messages.map((m, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
+            <div style={{
+              maxWidth: "85%", padding: "10px 14px", borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+              background: m.role === "user" ? `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})` : COLORS.navyLight,
+              color: m.role === "user" ? COLORS.navy : COLORS.cream, fontSize: 13, lineHeight: 1.5, fontWeight: m.role === "user" ? 600 : 400,
+            }}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: "flex", gap: 4, padding: "10px 14px", background: COLORS.navyLight, borderRadius: "16px 16px 16px 4px", width: "fit-content" }}>
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.gold, animation: `bounce 1s ${i * 0.2}s infinite` }} />
+            ))}
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+      {/* Input */}
+      <div style={{ padding: "12px 16px", borderTop: `1px solid ${COLORS.navyLight}`, display: "flex", gap: 8 }}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="Consulta sobre el caso..."
+          style={{ flex: 1, background: COLORS.navyLight, border: `1px solid ${COLORS.navyLight}`, borderRadius: 12, padding: "10px 14px", color: COLORS.cream, fontSize: 13, outline: "none" }}
+        />
+        <button onClick={send} disabled={loading} style={{
+          width: 40, height: 40, borderRadius: 12, background: COLORS.gold, border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", opacity: loading ? 0.5 : 1,
+        }}>
+          <Icon name="send" size={16} color={COLORS.navy} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── NEW LEAD MODAL ───────────────────────────────────────────────────────────
+const NewLeadModal = ({ onClose, onAdd }) => {
+  const [form, setForm] = useState({ name: "", cedula: "", phone: "", email: "", type: CASE_TYPES[0], city: "", description: "" });
+  const [step, setStep] = useState(1);
+  const [submitted, setSubmitted] = useState(false);
+  const radicado = `TJ-2026-${String(Math.floor(Math.random() * 900) + 100)}`;
+
+  const handleSubmit = () => {
+    const newLead = {
+      id: Date.now(), ...form, stage: "lead", date: new Date().toISOString().split("T")[0],
+      radicado, value: 0,
+    };
+    onAdd(newLead);
+    setSubmitted(true);
+  };
+
+  const inputStyle = { width: "100%", background: COLORS.navyLight, border: `1px solid ${COLORS.navyMid}`, borderRadius: 10, padding: "12px 14px", color: COLORS.cream, fontSize: 14, outline: "none", boxSizing: "border-box" };
+  const labelStyle = { fontSize: 12, color: COLORS.slateLight, fontWeight: 600, marginBottom: 6, display: "block", letterSpacing: 0.5 };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: COLORS.navy, border: `1px solid ${COLORS.navyLight}`, borderRadius: 20, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ padding: "24px 28px", borderBottom: `1px solid ${COLORS.navyLight}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.cream }}>Nuevo Lead</div>
+            <div style={{ fontSize: 13, color: COLORS.slateLight, marginTop: 2 }}>Captación de cliente potencial</div>
+          </div>
+          <button onClick={onClose} style={{ background: COLORS.navyLight, border: "none", borderRadius: 8, padding: 8, cursor: "pointer", color: COLORS.slateLight }}>
+            <Icon name="x" size={16} />
+          </button>
+        </div>
+
+        {submitted ? (
+          <div style={{ padding: 40, textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+            <div style={{ fontWeight: 800, fontSize: 20, color: COLORS.cream, marginBottom: 8 }}>¡Lead Registrado!</div>
+            <div style={{ color: COLORS.slateLight, marginBottom: 20 }}>Se ha asignado el radicado:</div>
+            <div style={{ background: COLORS.navyLight, borderRadius: 12, padding: "16px 24px", display: "inline-block" }}>
+              <div style={{ fontWeight: 800, fontSize: 24, color: COLORS.gold }}>{radicado}</div>
+            </div>
+            <div style={{ color: COLORS.slateLight, fontSize: 13, marginTop: 16, marginBottom: 24 }}>
+              Se enviará un correo de confirmación a {form.email} con los próximos pasos y el checklist de documentos para {form.type}.
+            </div>
+            <div style={{ background: COLORS.navyLight, borderRadius: 12, padding: 16, textAlign: "left" }}>
+              <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 10, fontSize: 13 }}>📋 Documentos requeridos para {form.type}:</div>
+              {(CHECKLIST_TEMPLATES[form.type] || []).map((d, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, color: COLORS.slateLight, fontSize: 12, marginBottom: 6 }}>
+                  <div style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${COLORS.navyMid}`, flexShrink: 0 }} />
+                  {d}
+                </div>
+              ))}
+            </div>
+            <button onClick={onClose} style={{ marginTop: 20, background: COLORS.gold, color: COLORS.navy, border: "none", borderRadius: 12, padding: "12px 32px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
+              Ir al CRM
+            </button>
+          </div>
+        ) : (
+          <div style={{ padding: 28 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>NOMBRE COMPLETO *</label>
+                <input style={inputStyle} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Nombre del cliente" />
+              </div>
+              <div>
+                <label style={labelStyle}>CÉDULA / NIT</label>
+                <input style={inputStyle} value={form.cedula} onChange={(e) => setForm({ ...form, cedula: e.target.value })} placeholder="Identificación" />
+              </div>
+              <div>
+                <label style={labelStyle}>TELÉFONO</label>
+                <input style={inputStyle} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="300 123 4567" />
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>CORREO ELECTRÓNICO</label>
+                <input style={inputStyle} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="cliente@email.com" />
+              </div>
+              <div>
+                <label style={labelStyle}>TIPO DE CASO</label>
+                <select style={{ ...inputStyle, cursor: "pointer" }} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                  {CASE_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>CIUDAD</label>
+                <input style={inputStyle} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Ciudad" />
+              </div>
+              <div style={{ gridColumn: "1/-1" }}>
+                <label style={labelStyle}>DESCRIPCIÓN DEL CASO</label>
+                <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 80 }} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Describa brevemente el caso..." />
+              </div>
+            </div>
+            <div style={{ marginTop: 20, background: COLORS.navyLight, borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: COLORS.gold, fontWeight: 700, marginBottom: 8 }}>📋 Documentos requeridos para {form.type}:</div>
+              {(CHECKLIST_TEMPLATES[form.type] || []).slice(0, 3).map((d, i) => (
+                <div key={i} style={{ fontSize: 12, color: COLORS.slateLight, display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <span style={{ color: COLORS.gold }}>•</span> {d}
+                </div>
+              ))}
+              {CHECKLIST_TEMPLATES[form.type]?.length > 3 && (
+                <div style={{ fontSize: 11, color: COLORS.slate, marginTop: 4 }}>+{CHECKLIST_TEMPLATES[form.type].length - 3} más...</div>
+              )}
+            </div>
+            <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+              <button onClick={onClose} style={{ flex: 1, background: COLORS.navyLight, color: COLORS.slateLight, border: "none", borderRadius: 12, padding: "14px", fontWeight: 600, cursor: "pointer" }}>
+                Cancelar
+              </button>
+              <button onClick={handleSubmit} disabled={!form.name || !form.email} style={{ flex: 2, background: form.name && form.email ? `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})` : COLORS.navyLight, color: form.name && form.email ? COLORS.navy : COLORS.slate, border: "none", borderRadius: 12, padding: "14px", fontWeight: 700, cursor: "pointer", fontSize: 14 }}>
+                Registrar Lead →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── LEAD DETAIL PANEL ────────────────────────────────────────────────────────
+const LeadDetail = ({ lead, onClose, onStageChange }) => {
+  const [activeTab, setActiveTab] = useState("overview");
+  const checklist = CHECKLIST_TEMPLATES[lead.type] || [];
+  const [checked, setChecked] = useState(checklist.map((_, i) => i < 2));
+  const activity = ACTIVITIES.filter((a) => a.leadId === lead.id);
+
+  const tabs = [
+    { id: "overview", label: "Resumen" },
+    { id: "progress", label: "Progreso" },
+    { id: "docs", label: "Documentos" },
+    { id: "activity", label: "Actividad" },
+  ];
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "flex-end", padding: 0 }}>
+      <div style={{ width: "min(580px, 100vw)", height: "100vh", background: COLORS.navy, borderLeft: `1px solid ${COLORS.navyLight}`, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        {/* Header */}
+        <div style={{ padding: "24px 28px", background: COLORS.navyMid, borderBottom: `1px solid ${COLORS.navyLight}`, position: "sticky", top: 0, zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 20, color: COLORS.cream }}>{lead.name}</div>
+              <div style={{ fontSize: 13, color: COLORS.gold, fontWeight: 600, marginTop: 2 }}>{lead.radicado} · {lead.type}</div>
+            </div>
+            <button onClick={onClose} style={{ background: COLORS.navyLight, border: "none", borderRadius: 8, padding: 8, cursor: "pointer", color: COLORS.slateLight }}>
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+          <ProgressTracker stage={lead.stage} />
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 0, borderBottom: `1px solid ${COLORS.navyLight}`, padding: "0 28px" }}>
+          {tabs.map((t) => (
+            <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
+              background: "none", border: "none", borderBottom: activeTab === t.id ? `2px solid ${COLORS.gold}` : "2px solid transparent",
+              color: activeTab === t.id ? COLORS.gold : COLORS.slateLight, padding: "14px 16px", cursor: "pointer", fontWeight: 600, fontSize: 13,
+            }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, padding: 28 }}>
+          {activeTab === "overview" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              {/* Info Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {[
+                  { l: "Cédula", v: lead.cedula },
+                  { l: "Teléfono", v: lead.phone },
+                  { l: "Correo", v: lead.email },
+                  { l: "Ciudad", v: lead.city },
+                  { l: "Fecha ingreso", v: formatDate(lead.date) },
+                  { l: "Valor estimado", v: formatCurrency(lead.value), highlight: true },
+                ].map((f, i) => (
+                  <div key={i} style={{ background: COLORS.navyMid, borderRadius: 10, padding: "12px 16px" }}>
+                    <div style={{ fontSize: 11, color: COLORS.slateLight, fontWeight: 600, marginBottom: 4, letterSpacing: 0.5 }}>{f.l.toUpperCase()}</div>
+                    <div style={{ fontSize: 14, color: f.highlight ? COLORS.goldLight : COLORS.cream, fontWeight: f.highlight ? 700 : 400 }}>{f.v}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Stage Selector */}
+              <div>
+                <div style={{ fontSize: 12, color: COLORS.slateLight, fontWeight: 600, marginBottom: 10, letterSpacing: 0.5 }}>CAMBIAR ETAPA</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {PIPELINE_STAGES.map((s) => (
+                    <button key={s.id} onClick={() => onStageChange(lead.id, s.id)} style={{
+                      padding: "8px 14px", borderRadius: 20, border: `1px solid ${lead.stage === s.id ? s.color : COLORS.navyLight}`,
+                      background: lead.stage === s.id ? s.color + "22" : "transparent",
+                      color: lead.stage === s.id ? s.color : COLORS.slateLight,
+                      cursor: "pointer", fontSize: 12, fontWeight: 600, transition: "all 0.2s",
+                    }}>
+                      {s.icon} {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "progress" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {PIPELINE_STAGES.map((s, i) => {
+                const idx = PIPELINE_STAGES.findIndex((p) => p.id === lead.stage);
+                const done = i <= idx;
+                return (
+                  <div key={s.id} style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: done ? s.color : COLORS.navyLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {done ? <Icon name="check" size={16} color="#fff" /> : <span>{s.icon}</span>}
+                      </div>
+                      {i < PIPELINE_STAGES.length - 1 && <div style={{ width: 2, height: 24, background: done ? s.color : COLORS.navyLight }} />}
+                    </div>
+                    <div style={{ paddingTop: 6 }}>
+                      <div style={{ fontWeight: 700, color: done ? COLORS.cream : COLORS.slate, fontSize: 14 }}>{s.label}</div>
+                      {done && <div style={{ fontSize: 12, color: COLORS.slateLight, marginTop: 2 }}>Completado · {formatDate(lead.date)}</div>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {activeTab === "docs" && (
+            <div>
+              <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 16 }}>Checklist — {lead.type}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {checklist.map((doc, i) => (
+                  <div key={i} onClick={() => setChecked((c) => c.map((v, j) => j === i ? !v : v))} style={{
+                    display: "flex", alignItems: "center", gap: 12, background: COLORS.navyMid, borderRadius: 10, padding: "12px 16px",
+                    cursor: "pointer", border: `1px solid ${checked[i] ? COLORS.success + "44" : COLORS.navyLight}`,
+                    transition: "all 0.2s",
+                  }}>
+                    <div style={{ width: 20, height: 20, borderRadius: 6, background: checked[i] ? COLORS.success : "transparent", border: `2px solid ${checked[i] ? COLORS.success : COLORS.navyLight}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {checked[i] && <Icon name="check" size={12} color="#fff" />}
+                    </div>
+                    <span style={{ fontSize: 13, color: checked[i] ? COLORS.slateLight : COLORS.cream, textDecoration: checked[i] ? "line-through" : "none" }}>{doc}</span>
+                    {checked[i] && (
+                      <div style={{ marginLeft: "auto" }}>
+                        <Icon name="upload" size={14} color={COLORS.gold} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: 16, fontSize: 13, color: COLORS.slateLight }}>
+                {checked.filter(Boolean).length}/{checklist.length} documentos recibidos
+              </div>
+            </div>
+          )}
+
+          {activeTab === "activity" && (
+            <div>
+              <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 16 }}>Historial de Actividad</div>
+              {activity.length === 0 ? (
+                <div style={{ color: COLORS.slateLight, fontSize: 13 }}>Sin actividad registrada</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {activity.map((a) => {
+                    const icons = { email: "📧", call: "📞", doc: "📄", meeting: "📅", quote: "💰" };
+                    return (
+                      <div key={a.id} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: COLORS.navyLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 16 }}>
+                          {icons[a.type] || "📌"}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 13, color: COLORS.cream }}>{a.text}</div>
+                          <div style={{ fontSize: 11, color: COLORS.slateLight, marginTop: 2 }}>{a.date} · {a.user}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── VIEWS ────────────────────────────────────────────────────────────────────
+const DashboardView = ({ leads }) => {
+  const totalValue = leads.reduce((s, l) => s + l.value, 0);
+  const active = leads.filter((l) => !["closed"].includes(l.stage)).length;
+  const closed = leads.filter((l) => l.stage === "closed").length;
+  const conversion = Math.round((closed / leads.length) * 100);
+  const monthData = [
+    { label: "Ene", value: 8 }, { label: "Feb", value: 12 }, { label: "Mar", value: 15 },
+    { label: "Abr", value: 11 }, { label: "May", value: 18 }, { label: "Jun", value: leads.length },
+  ];
+  const typeCount = CASE_TYPES.map((t) => ({ type: t, count: leads.filter((l) => l.type === t).length })).filter((t) => t.count > 0);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h2 style={{ fontWeight: 900, fontSize: 24, color: COLORS.cream, margin: 0 }}>Panel de Control</h2>
+        <p style={{ color: COLORS.slateLight, margin: "4px 0 0" }}>Resumen operacional — Total Jurídico Abogados</p>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+        <StatCard label="Leads Totales" value={leads.length} sub="Este mes" color={COLORS.info} icon="📥" />
+        <StatCard label="Casos Activos" value={active} sub="En curso" color={COLORS.warning} icon="⚖️" />
+        <StatCard label="Finalizados" value={closed} sub="Cerrados" color={COLORS.success} icon="✅" />
+        <StatCard label="Conversión" value={`${conversion}%`} sub="Lead → Cliente" color={COLORS.goldLight} icon="📈" />
+        <StatCard label="Ingresos Est." value={formatCurrency(totalValue).replace("COP", "$")} sub="Total cartera" color="#EC4899" icon="💰" />
+      </div>
+
+      {/* Charts Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 4, fontSize: 14 }}>Leads por Mes</div>
+          <div style={{ fontSize: 12, color: COLORS.slateLight, marginBottom: 16 }}>2026</div>
+          <MiniBarChart data={monthData} color={COLORS.gold} />
+        </div>
+        <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 4, fontSize: 14 }}>Casos por Tipo</div>
+          <div style={{ fontSize: 12, color: COLORS.slateLight, marginBottom: 16 }}>Distribución actual</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {typeCount.map((t, i) => {
+              const pct = Math.round((t.count / leads.length) * 100);
+              const colors = [COLORS.info, COLORS.warning, COLORS.success, COLORS.gold, "#EC4899", "#8B5CF6"];
+              return (
+                <div key={t.type} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 11, color: COLORS.slateLight, width: 120, flexShrink: 0 }}>{t.type}</div>
+                  <div style={{ flex: 1, height: 8, background: COLORS.navyLight, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${pct}%`, height: "100%", background: colors[i % colors.length], borderRadius: 4 }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: COLORS.cream, fontWeight: 700, width: 20, textAlign: "right" }}>{t.count}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: 20 }}>
+        <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 16 }}>Actividad Reciente</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {ACTIVITIES.slice(0, 5).map((a) => {
+            const lead = INITIAL_LEADS.find((l) => l.id === a.leadId);
+            return (
+              <div key={a.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: COLORS.navy, borderRadius: 10 }}>
+                <span style={{ fontSize: 18 }}>{a.type === "email" ? "📧" : a.type === "call" ? "📞" : a.type === "doc" ? "📄" : a.type === "meeting" ? "📅" : "💰"}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: COLORS.cream }}>{a.text}</div>
+                  <div style={{ fontSize: 11, color: COLORS.slateLight }}>{lead?.name} · {a.date}</div>
+                </div>
+                <div style={{ fontSize: 11, color: COLORS.slate }}>{a.user}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PipelineView = ({ leads, onLeadClick, onStageChange }) => {
+  const [dragging, setDragging] = useState(null);
+  const [hoveredStage, setHoveredStage] = useState(null);
+
+  const handleDrop = (stageId) => {
+    if (dragging) {
+      onStageChange(dragging.id, stageId);
+      setDragging(null);
+      setHoveredStage(null);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <h2 style={{ fontWeight: 900, fontSize: 24, color: COLORS.cream, margin: 0 }}>Pipeline CRM</h2>
+        <p style={{ color: COLORS.slateLight, margin: "4px 0 0" }}>Arrastra los casos entre etapas para actualizar su estado</p>
+      </div>
+      <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+        {PIPELINE_STAGES.map((stage) => {
+          const stageLeads = leads.filter((l) => l.stage === stage.id);
+          const stageValue = stageLeads.reduce((s, l) => s + l.value, 0);
+          return (
+            <div key={stage.id}
+              onDragOver={(e) => { e.preventDefault(); setHoveredStage(stage.id); }}
+              onDrop={() => handleDrop(stage.id)}
+              onDragLeave={() => setHoveredStage(null)}
+              style={{ minWidth: 220, flex: "0 0 220px", background: hoveredStage === stage.id ? COLORS.navyLight : COLORS.navyMid, borderRadius: 16, border: `1px solid ${hoveredStage === stage.id ? stage.color : COLORS.navyLight}`, padding: 14, transition: "all 0.2s" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: stage.color }} />
+                  <span style={{ fontWeight: 700, fontSize: 12, color: COLORS.cream, letterSpacing: 0.3 }}>{stage.label}</span>
+                </div>
+                <span style={{ background: stage.color + "22", color: stage.color, borderRadius: 20, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{stageLeads.length}</span>
+              </div>
+              {stageValue > 0 && (
+                <div style={{ fontSize: 11, color: COLORS.slateLight, marginBottom: 10 }}>{formatCurrency(stageValue)}</div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {stageLeads.map((lead) => (
+                  <div key={lead.id}
+                    draggable
+                    onDragStart={() => setDragging(lead)}
+                    onClick={() => onLeadClick(lead)}
+                    style={{ background: COLORS.navy, borderRadius: 10, padding: "12px 14px", cursor: "grab", border: `1px solid ${COLORS.navyLight}`, transition: "all 0.2s", userSelect: "none" }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = stage.color}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = COLORS.navyLight}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.cream, marginBottom: 4 }}>{lead.name}</div>
+                    <div style={{ fontSize: 11, color: COLORS.slateLight, marginBottom: 6 }}>{lead.type} · {lead.city}</div>
+                    <div style={{ fontSize: 11, color: COLORS.gold, fontWeight: 600 }}>{lead.radicado}</div>
+                    {lead.value > 0 && <div style={{ fontSize: 12, color: COLORS.cream, marginTop: 4, fontWeight: 600 }}>{formatCurrency(lead.value)}</div>}
+                  </div>
+                ))}
+                {stageLeads.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "20px 0", color: COLORS.slate, fontSize: 12 }}>Sin casos</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const ClientsView = ({ leads, onLeadClick }) => {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
+  const filtered = leads.filter((l) => {
+    const matchSearch = l.name.toLowerCase().includes(search.toLowerCase()) || l.radicado.includes(search) || l.type.toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === "all" || l.stage === filter;
+    return matchSearch && matchFilter;
+  });
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <h2 style={{ fontWeight: 900, fontSize: 24, color: COLORS.cream, margin: 0 }}>Clientes y Leads</h2>
+        <p style={{ color: COLORS.slateLight, margin: "4px 0 0" }}>{leads.length} registros totales</p>
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+          <div style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }}>
+            <Icon name="search" size={16} color={COLORS.slateLight} />
+          </div>
+          <input
+            value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nombre, radicado, tipo..."
+            style={{ width: "100%", background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 10, padding: "12px 14px 12px 42px", color: COLORS.cream, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+          />
+        </div>
+        <select value={filter} onChange={(e) => setFilter(e.target.value)} style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 10, padding: "12px 14px", color: COLORS.cream, fontSize: 13, cursor: "pointer", outline: "none" }}>
+          <option value="all">Todas las etapas</option>
+          {PIPELINE_STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </div>
+      <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${COLORS.navyLight}` }}>
+              {["Cliente", "Radicado", "Tipo", "Ciudad", "Etapa", "Valor", "Fecha"].map((h) => (
+                <th key={h} style={{ padding: "14px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: COLORS.slateLight, letterSpacing: 0.5, textTransform: "uppercase" }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((lead, i) => (
+              <tr key={lead.id} onClick={() => onLeadClick(lead)} style={{ borderBottom: `1px solid ${COLORS.navyLight}`, cursor: "pointer", transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = COLORS.navyLight}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <td style={{ padding: "14px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${COLORS.navyLight}, ${COLORS.navyMid})`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontWeight: 700, fontSize: 13, color: COLORS.gold }}>
+                      {lead.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: COLORS.cream, fontSize: 13 }}>{lead.name}</div>
+                      <div style={{ fontSize: 11, color: COLORS.slateLight }}>{lead.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ padding: "14px 16px", fontSize: 12, color: COLORS.gold, fontWeight: 600 }}>{lead.radicado}</td>
+                <td style={{ padding: "14px 16px", fontSize: 13, color: COLORS.slateLight }}>{lead.type}</td>
+                <td style={{ padding: "14px 16px", fontSize: 13, color: COLORS.slateLight }}>{lead.city}</td>
+                <td style={{ padding: "14px 16px" }}><Badge stage={lead.stage} /></td>
+                <td style={{ padding: "14px 16px", fontSize: 13, color: lead.value ? COLORS.cream : COLORS.slate, fontWeight: lead.value ? 600 : 400 }}>{lead.value ? formatCurrency(lead.value) : "—"}</td>
+                <td style={{ padding: "14px 16px", fontSize: 12, color: COLORS.slateLight }}>{formatDate(lead.date)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div style={{ textAlign: "center", padding: "40px 20px", color: COLORS.slateLight }}>Sin resultados</div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const DocsView = () => {
+  const docs = [
+    { name: "Checklist Sucesión — Mendoza.pdf", type: "PDF", size: "240 KB", date: "2026-05-28", lead: "Carlos Mendoza", status: "uploaded" },
+    { name: "Contrato Arrendamiento — González.docx", type: "DOCX", size: "85 KB", date: "2026-05-27", lead: "María González", status: "pending" },
+    { name: "Cotización TJ-2026-003.pdf", type: "PDF", size: "120 KB", date: "2026-05-25", lead: "Empresa SAS", status: "uploaded" },
+    { name: "Escritura Pública — Herrera.pdf", type: "PDF", size: "1.2 MB", date: "2026-05-10", lead: "Luis Herrera", status: "uploaded" },
+    { name: "Estados Financieros Q1.xlsx", type: "XLSX", size: "340 KB", date: "2026-05-15", lead: "Luis Herrera", status: "uploaded" },
+  ];
+
+  const typeColor = { PDF: "#EF4444", DOCX: "#3B82F6", XLSX: "#10B981", IMG: "#F59E0B" };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ fontWeight: 900, fontSize: 24, color: COLORS.cream, margin: 0 }}>Gestión Documental</h2>
+          <p style={{ color: COLORS.slateLight, margin: "4px 0 0" }}>Documentos del sistema</p>
+        </div>
+        <button style={{ background: COLORS.gold, color: COLORS.navy, border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="upload" size={16} color={COLORS.navy} /> Subir Documento
+        </button>
+      </div>
+
+      <div style={{ background: COLORS.navyMid, border: `2px dashed ${COLORS.navyLight}`, borderRadius: 16, padding: "32px", textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📁</div>
+        <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 8 }}>Arrastra archivos aquí</div>
+        <div style={{ color: COLORS.slateLight, fontSize: 13 }}>PDF, Word, Excel, Imágenes — máx. 50MB por archivo</div>
+      </div>
+
+      <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, overflow: "hidden" }}>
+        {docs.map((doc, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 14, padding: "16px 20px", borderBottom: i < docs.length - 1 ? `1px solid ${COLORS.navyLight}` : "none", transition: "background 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.background = COLORS.navyLight}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: (typeColor[doc.type] || COLORS.slate) + "22", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: typeColor[doc.type] || COLORS.slate }}>{doc.type}</span>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, color: COLORS.cream, fontSize: 14 }}>{doc.name}</div>
+              <div style={{ fontSize: 12, color: COLORS.slateLight, marginTop: 2 }}>{doc.lead} · {doc.size} · {formatDate(doc.date)}</div>
+            </div>
+            <span style={{ fontSize: 11, background: doc.status === "uploaded" ? COLORS.success + "22" : COLORS.warning + "22", color: doc.status === "uploaded" ? COLORS.success : COLORS.warning, padding: "4px 10px", borderRadius: 20, fontWeight: 700 }}>
+              {doc.status === "uploaded" ? "✓ Recibido" : "⏳ Pendiente"}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const CalendarView = () => {
+  const days = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+  const today = new Date();
+  const appointments = [
+    { day: 2, time: "10:00", client: "Carlos Mendoza", type: "Consulta inicial", lawyer: "Dr. Ramírez", color: COLORS.info },
+    { day: 4, time: "14:30", client: "Empresa SAS", type: "Reunión constitución", lawyer: "Dra. López", color: COLORS.gold },
+    { day: 6, time: "09:00", client: "Pedro Rodríguez", type: "Revisión contrato", lawyer: "Dr. Ramírez", color: COLORS.success },
+    { day: 9, time: "11:00", client: "Ana Martínez", type: "Seguimiento", lawyer: "Dra. López", color: COLORS.warning },
+    { day: 11, time: "16:00", client: "Luis Herrera", type: "Audiencia virtual", lawyer: "Dr. Ramírez", color: "#EC4899" },
+  ];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ fontWeight: 900, fontSize: 24, color: COLORS.cream, margin: 0 }}>Agenda Inteligente</h2>
+          <p style={{ color: COLORS.slateLight, margin: "4px 0 0" }}>Junio 2026</p>
+        </div>
+        <button style={{ background: COLORS.gold, color: COLORS.navy, border: "none", borderRadius: 12, padding: "12px 20px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+          <Icon name="plus" size={16} color={COLORS.navy} /> Nueva Cita
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {/* Mini Calendar */}
+        <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 8 }}>
+            {days.map((d) => <div key={d} style={{ textAlign: "center", fontSize: 11, color: COLORS.slateLight, fontWeight: 700, padding: "4px 0" }}>{d}</div>)}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+            {Array.from({ length: 30 }, (_, i) => {
+              const dayNum = i + 1;
+              const hasAppt = appointments.some((a) => a.day === dayNum);
+              const isToday = dayNum === 31;
+              return (
+                <div key={i} style={{
+                  textAlign: "center", padding: "8px 4px", borderRadius: 8, fontSize: 13, cursor: "pointer",
+                  background: isToday ? COLORS.gold : hasAppt ? COLORS.navyLight : "transparent",
+                  color: isToday ? COLORS.navy : hasAppt ? COLORS.cream : COLORS.slateLight,
+                  fontWeight: isToday || hasAppt ? 700 : 400,
+                  position: "relative",
+                }}>
+                  {dayNum}
+                  {hasAppt && !isToday && <div style={{ width: 4, height: 4, borderRadius: "50%", background: COLORS.gold, position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)" }} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* Upcoming */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 4 }}>Próximas Citas</div>
+          {appointments.map((a, i) => (
+            <div key={i} style={{ background: COLORS.navyMid, border: `1px solid ${a.color}33`, borderLeft: `3px solid ${a.color}`, borderRadius: 10, padding: "12px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+              <div style={{ textAlign: "center", minWidth: 40 }}>
+                <div style={{ fontSize: 11, color: COLORS.slateLight }}>Jun</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: a.color }}>{a.day}</div>
+                <div style={{ fontSize: 11, color: COLORS.slateLight }}>{a.time}</div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.cream }}>{a.client}</div>
+                <div style={{ fontSize: 12, color: COLORS.slateLight }}>{a.type}</div>
+                <div style={{ fontSize: 11, color: a.color, fontWeight: 600, marginTop: 2 }}>{a.lawyer}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MetricsView = ({ leads }) => {
+  const byType = CASE_TYPES.map((t) => {
+    const typeLeads = leads.filter((l) => l.type === t);
+    return { type: t, count: typeLeads.length, value: typeLeads.reduce((s, l) => s + l.value, 0) };
+  }).filter((t) => t.count > 0);
+
+  const byStage = PIPELINE_STAGES.map((s) => ({ ...s, count: leads.filter((l) => l.stage === s.id).length }));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div>
+        <h2 style={{ fontWeight: 900, fontSize: 24, color: COLORS.cream, margin: 0 }}>Métricas Comerciales</h2>
+        <p style={{ color: COLORS.slateLight, margin: "4px 0 0" }}>Indicadores clave de desempeño</p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
+        <StatCard label="Ingresos Est." value={formatCurrency(leads.reduce((s, l) => s + l.value, 0)).replace("COP", "$")} color={COLORS.gold} icon="💰" />
+        <StatCard label="Ticket Promedio" value={formatCurrency(leads.reduce((s, l) => s + l.value, 0) / leads.length || 0).replace("COP", "$")} color={COLORS.info} icon="📊" />
+        <StatCard label="Tiempo Prom." value="12 días" sub="Lead a cierre" color={COLORS.success} icon="⏱" />
+        <StatCard label="NPS Estimado" value="78" sub="Satisfacción" color="#EC4899" icon="⭐" />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 16 }}>Pipeline por Etapa</div>
+          {byStage.map((s) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+              <div style={{ fontSize: 16 }}>{s.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: COLORS.slateLight }}>{s.label}</span>
+                  <span style={{ fontSize: 12, color: COLORS.cream, fontWeight: 700 }}>{s.count}</span>
+                </div>
+                <div style={{ height: 6, background: COLORS.navyLight, borderRadius: 3 }}>
+                  <div style={{ width: `${(s.count / leads.length) * 100}%`, height: "100%", background: s.color, borderRadius: 3, transition: "width 0.5s" }} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: COLORS.navyMid, border: `1px solid ${COLORS.navyLight}`, borderRadius: 16, padding: 20 }}>
+          <div style={{ fontWeight: 700, color: COLORS.cream, marginBottom: 16 }}>Ingresos por Tipo de Caso</div>
+          {byType.map((t, i) => {
+            const colors = [COLORS.gold, COLORS.info, COLORS.success, COLORS.warning, "#EC4899", "#8B5CF6"];
+            return (
+              <div key={t.type} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: COLORS.slateLight }}>{t.type}</span>
+                  <span style={{ fontSize: 12, color: COLORS.cream, fontWeight: 700 }}>{formatCurrency(t.value)}</span>
+                </div>
+                <div style={{ height: 8, background: COLORS.navyLight, borderRadius: 4 }}>
+                  <div style={{ width: `${(t.value / leads.reduce((s, l) => s + l.value, 0)) * 100}%`, height: "100%", background: colors[i % colors.length], borderRadius: 4 }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function App() {
+  const [view, setView] = useState("dashboard");
+  const [leads, setLeads] = useState(INITIAL_LEADS);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [showNewLead, setShowNewLead] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const addLead = (lead) => setLeads((l) => [lead, ...l]);
+  const updateStage = (id, stage) => setLeads((l) => l.map((lead) => lead.id === id ? { ...lead, stage } : lead));
+
+  const navItems = [
+    { id: "dashboard", label: "Dashboard", icon: "dashboard" },
+    { id: "pipeline", label: "Pipeline CRM", icon: "pipeline" },
+    { id: "clients", label: "Clientes", icon: "clients" },
+    { id: "docs", label: "Documentos", icon: "docs" },
+    { id: "calendar", label: "Agenda", icon: "calendar" },
+    { id: "metrics", label: "Métricas", icon: "metrics" },
+  ];
+
+  const renderView = () => {
+    switch (view) {
+      case "dashboard": return <DashboardView leads={leads} />;
+      case "pipeline": return <PipelineView leads={leads} onLeadClick={setSelectedLead} onStageChange={updateStage} />;
+      case "clients": return <ClientsView leads={leads} onLeadClick={setSelectedLead} />;
+      case "docs": return <DocsView />;
+      case "calendar": return <CalendarView />;
+      case "metrics": return <MetricsView leads={leads} />;
+      default: return null;
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", height: "100vh", background: COLORS.navy, fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif", color: COLORS.cream, overflow: "hidden" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800;900&display=swap');
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1A3158; border-radius: 3px; }
+        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+      `}</style>
+
+      {/* Sidebar */}
+      <div style={{
+        width: 240, flexShrink: 0, background: COLORS.navyMid, borderRight: `1px solid ${COLORS.navyLight}`,
+        display: "flex", flexDirection: "column", padding: "0 0 20px",
+        transition: "transform 0.3s",
+      }}>
+        {/* Logo */}
+        <div style={{ padding: "24px 20px 20px", borderBottom: `1px solid ${COLORS.navyLight}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 12, background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Icon name="scale" size={20} color={COLORS.navy} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 14, color: COLORS.cream, letterSpacing: -0.3 }}>Total Jurídico</div>
+              <div style={{ fontSize: 10, color: COLORS.gold, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase" }}>Abogados</div>
+            </div>
+          </div>
+        </div>
+
+        {/* New Lead Button */}
+        <div style={{ padding: "16px 16px 8px" }}>
+          <button onClick={() => setShowNewLead(true)} style={{
+            width: "100%", background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})`,
+            color: COLORS.navy, border: "none", borderRadius: 12, padding: "12px 16px", fontWeight: 700, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 14,
+          }}>
+            <Icon name="plus" size={16} color={COLORS.navy} /> Nuevo Lead
+          </button>
+        </div>
+
+        {/* Nav */}
+        <nav style={{ flex: 1, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2 }}>
+          {navItems.map((item) => (
+            <button key={item.id} onClick={() => setView(item.id)} style={{
+              width: "100%", background: view === item.id ? COLORS.navyLight : "transparent",
+              border: "none", borderRadius: 10, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10,
+              cursor: "pointer", transition: "all 0.15s", textAlign: "left",
+              borderLeft: view === item.id ? `3px solid ${COLORS.gold}` : "3px solid transparent",
+            }}>
+              <Icon name={item.icon} size={16} color={view === item.id ? COLORS.goldLight : COLORS.slateLight} />
+              <span style={{ fontSize: 13, fontWeight: view === item.id ? 700 : 500, color: view === item.id ? COLORS.cream : COLORS.slateLight }}>
+                {item.label}
+              </span>
+              {item.id === "pipeline" && (
+                <span style={{ marginLeft: "auto", background: COLORS.gold + "22", color: COLORS.gold, borderRadius: 20, padding: "1px 7px", fontSize: 10, fontWeight: 700 }}>{leads.length}</span>
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* User */}
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${COLORS.navyLight}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg, ${COLORS.gold}, ${COLORS.goldDim})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: COLORS.navy }}>A</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.cream }}>Admin</div>
+              <div style={{ fontSize: 11, color: COLORS.gold }}>Administrador</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        {/* Topbar */}
+        <div style={{ padding: "16px 28px", borderBottom: `1px solid ${COLORS.navyLight}`, display: "flex", alignItems: "center", gap: 16, background: COLORS.navyMid }}>
+          <div style={{ flex: 1 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 4, background: COLORS.navyLight, borderRadius: 20, padding: "4px 12px" }}>
+            <div style={{ width: 6, height: 6, borderRadius: "50%", background: COLORS.success }} />
+            <span style={{ fontSize: 11, color: COLORS.slateLight, fontWeight: 600 }}>Sistema activo</span>
+          </div>
+          <button style={{ background: COLORS.navyLight, border: "none", borderRadius: 10, padding: 10, cursor: "pointer", color: COLORS.slateLight, position: "relative" }}>
+            <Icon name="bell" size={16} />
+            <div style={{ position: "absolute", top: 6, right: 6, width: 8, height: 8, borderRadius: "50%", background: COLORS.danger, border: `2px solid ${COLORS.navyMid}` }} />
+          </button>
+          <button style={{ background: COLORS.navyLight, border: "none", borderRadius: 10, padding: 10, cursor: "pointer", color: COLORS.slateLight }}>
+            <Icon name="settings" size={16} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ flex: 1, overflowY: "auto", padding: 28 }}>
+          {renderView()}
+        </div>
+      </div>
+
+      {/* Modals */}
+      {showNewLead && <NewLeadModal onClose={() => setShowNewLead(false)} onAdd={addLead} />}
+      {selectedLead && <LeadDetail lead={selectedLead} onClose={() => setSelectedLead(null)} onStageChange={(id, stage) => { updateStage(id, stage); setSelectedLead((l) => ({ ...l, stage })); }} />}
+
+      {/* AI Assistant */}
+      <AIAssistant lead={selectedLead} />
+    </div>
+  );
+}
